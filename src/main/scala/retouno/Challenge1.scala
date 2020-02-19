@@ -3,6 +3,8 @@ package retouno
 import org.apache.spark.sql.{DataFrame, Dataset, RelationalGroupedDataset}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.functions.{count, sum}
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 
 
@@ -24,7 +26,15 @@ case class AirlineStats(name: String,
                         onTimeFlights: Long)
 
 case class FlightsStats(destination: String, morningFlights: Long, afternoonFlights: Long, nightFlights: Long)
+
 case class Flights(ORIGIN: String, DEST: String, DEP_TIME: String)
+
+case class CancelledFlight(origin: String, destination: String, cancelled: Double, causes: List[(String, Int)])
+
+case class CandelledFLightInfo(ORIGIN: String, DEST: String, CANCELLED: String, CANCELLATION_CODE: String )
+
+case class DayDelay(FL_DATE: String, ARR_DELAY:String)
+
 
 trait Challenge1 {
 
@@ -117,9 +127,6 @@ trait Challenge1 {
   }
 
   //3. Encuentre ¿Cuáles son los números de vuelo (top 20)  que han tenido más cancelaciones y sus causas?
-
-  case class CancelledFlight(number: Int, origin: String, destination: String, cancelled: Long, causes: List[(String, Int)])
-
   /**
    * Encuentre los vuelos más cancelados y cual es la causa mas frecuente
    * Un vuelo es cancelado si CANCELLED = 1
@@ -127,7 +134,28 @@ trait Challenge1 {
    *
    * @param ds
    */
-  def flightInfo(ds: DataFrame): Seq[CancelledFlight] = ???
+  def flightInfo(ds: Dataset[CandelledFLightInfo]): Seq[CancelledFlight] = {
+
+    import ds.sparkSession.implicits._
+
+    ds.filter(f => f.CANCELLED.toDouble == 1.0)
+      .map(f =>
+        (f.ORIGIN,
+          f.DEST,
+          f.CANCELLED.toDouble,
+          f.CANCELLATION_CODE
+        ))
+      .collect()
+      .toList
+      .groupBy(a => (a._1, a._2))
+      .map(a => CancelledFlight(
+        a._1._1,
+        a._1._2,
+        a._2.map(_._3).foldLeft(0.0)(_ + _),
+        a._2.groupBy(_._4).toList.map(p => (p._1, p._2.length))
+      ))
+      .toList
+  }
 
   //4. ¿Que dias se presentan más retrasos históricamente?
   /**
@@ -137,6 +165,25 @@ trait Challenge1 {
    * @param ds
    * @return Una lista con tuplas de la forma (DayOfTheWeek, NumberOfDelays) i.e.("Monday",12356)
    */
-  def daysWithDelays(ds: DataFrame): List[(String, Long)] = ???
+  def daysWithDelays(ds: Dataset[DayDelay]): List[(String, Long)] = {
+
+    import ds.sparkSession.implicits._
+
+    ds.show()
+
+    ds.filter(_.ARR_DELAY.toDouble > 45)
+      .map(a => (dateToDay(a.FL_DATE), 1.0 ))
+      .collect()
+      .toList
+      .groupBy(_._1)
+      .map(a => (a._1, a._2.length.toLong))
+      .toList
+    List()
+  }
+
+  def dateToDay: String => String = { date =>
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-d")
+    LocalDate.parse(date, formatter).getDayOfWeek.toString
+  }
 
 }

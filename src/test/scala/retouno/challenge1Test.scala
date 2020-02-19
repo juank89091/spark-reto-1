@@ -32,4 +32,28 @@ class challenge1Test extends FunSuite with SparkSessionTestWrapper with Challeng
     destinations(csv, "DCA" )
   }
 
+  test("flightInfo") {
+
+    val csv: Dataset[CandelledFLightInfo] = spark.read.format("csv")
+      .option("header", "true")
+      .load(
+        "resources/delay-and-cancellation/2009.csv",
+        "resources/delay-and-cancellation/2018.csv"
+      ).as[CandelledFLightInfo]
+
+    flightInfo(csv )
+  }
+
+  test("daysWithDelays") {
+
+    val csv: Dataset[DayDelay] = spark.read.format("csv")
+      .option("header", "true")
+      .load(
+        "resources/delay-and-cancellation/2009.csv",
+        "resources/delay-and-cancellation/2018.csv"
+      ).as[DayDelay]
+
+    daysWithDelays(csv)
+  }
+
 }
