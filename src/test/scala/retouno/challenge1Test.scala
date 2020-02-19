@@ -14,18 +14,22 @@ class challenge1Test extends FunSuite with SparkSessionTestWrapper with Challeng
       .option("header", "true")
       .load(
         "resources/delay-and-cancellation/2009.csv",
-//        "resources/delay-and-cancellation/2010.csv",
-//        "resources/delay-and-cancellation/2011.csv",
-//        "resources/delay-and-cancellation/2012.csv",
-//        "resources/delay-and-cancellation/2013.csv",
-//        "resources/delay-and-cancellation/2014.csv",
-//        "resources/delay-and-cancellation/2015.csv",
-//        "resources/delay-and-cancellation/2016.csv",
-//        "resources/delay-and-cancellation/2017.csv",
         "resources/delay-and-cancellation/2018.csv"
       ).as[AirlineDelay]
 
     delayedAirlines(csv, None)
+  }
+
+  test("destinations") {
+
+    val csv: Dataset[Flights] = spark.read.format("csv")
+      .option("header", "true")
+      .load(
+        "resources/delay-and-cancellation/2009.csv",
+        "resources/delay-and-cancellation/2018.csv"
+      ).as[Flights]
+
+    destinations(csv, "DCA" )
   }
 
 }

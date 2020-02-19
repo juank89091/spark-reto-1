@@ -1,6 +1,11 @@
 package retouno
 
 import org.apache.spark.sql.{DataFrame, Dataset, RelationalGroupedDataset}
+import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.{count, sum}
+
+
+
 //1. ¿Cuáles son las aerolíneas más cumplidas y las menos cumplidas de un año en especifico?
 //La respuesta debe incluir el nombre completo de la aerolínea, si no se envia el año debe calcular con
 //toda la información disponible.
@@ -17,6 +22,9 @@ case class AirlineStats(name: String,
                         largeDelayFlights: Long,
                         smallDelayFlights: Long,
                         onTimeFlights: Long)
+
+case class FlightsStats(destination: String, morningFlights: Long, afternoonFlights: Long, nightFlights: Long)
+case class Flights(ORIGIN: String, DEST: String, DEP_TIME: String)
 
 trait Challenge1 {
 
@@ -35,25 +43,50 @@ trait Challenge1 {
    * @param year
    */
   def delayedAirlines(ds: Dataset[AirlineDelay], year: Option[String]): Seq[AirlineStats] = {
-    val dataSet =
-      year.map(y =>
+
+    import org.apache.spark.sql.functions.udf
+    import ds.sparkSession.implicits._
+
+    val toUdf = udf(onTime)
+    val toUdfSmall = udf(small_delay)
+    val toUdfLarge = udf(large_delay)
+
+    val dataSet = year.map(y =>
         ds.filter(a => a.FL_DATE.substring(0, 4) == y))
       .getOrElse(ds)
 
-    val numeroVuelosAerolinea: DataFrame = dataSet.groupBy("OP_CARRIER")
+    val clasificacionVuelo =
+      dataSet.filter(_.ARR_DELAY.isDefined)
+        .withColumn("onTimeFlights", toUdf(col("ARR_DELAY")))
+        .withColumn("smallDelayFlights", toUdfSmall(col("ARR_DELAY")))
+        .withColumn("largeDelayFlights", toUdfLarge(col("ARR_DELAY")))
+        .groupBy("OP_CARRIER")
+        .agg(
+          count("OP_CARRIER").as("totalFlights"),
+          sum("onTimeFlights").as("onTimeFlights"),
+          sum("smallDelayFlights").as("smallDelayFlights"),
+          sum("largeDelayFlights").as("largeDelayFlights")
+        ).withColumnRenamed("OP_CARRIER", "name")
+      .sort(col("largeDelayFlights").desc, col("smallDelayFlights").desc,col("onTimeFlights").desc)
+          .as[AirlineStats]
 
-      .count()
+    clasificacionVuelo.show()
+    clasificacionVuelo.collect().toList
+  }
 
-    numeroVuelosAerolinea.show()
+  def onTime: String => Int = { retraso =>
+    if (retraso.toDouble < 5  ) 1 else 0
+  }
 
-  //  dataSet.filter(ad => ad.ARR_DELAY.isDefined)
-  //      .map(ad => ad)
+  def small_delay: String => Int = { retraso =>
+    if (retraso.toDouble > 5  && retraso.toDouble < 45 ) 1 else 0
+  }
 
-
-null  }
+  def large_delay: String => Int = { retraso =>
+    if (retraso.toDouble >= 45  ) 1 else 0
+  }
 
   // 2. Dado un origen por ejemplo DCA (Washington), ¿Cuáles son destinos y cuantos vuelos presentan durante la mañana, tarde y noche?
-  case class FlightsStats(destination: String, morningFlights: Long, afternoonFlights: Long, nightFlights: Long)
 
   /**
    * Encuentre los destinos a partir de un origen, y de acuerdo a DEP_TIME clasifique el vuelo de la siguiente manera:
@@ -65,7 +98,23 @@ null  }
    * @param origin
    * @return
    */
-  def destinations(ds: DataFrame, origin: String): Seq[FlightsStats] = ???
+  def destinations(ds: Dataset[Flights], origin: String): Seq[FlightsStats] = {
+    import ds.sparkSession.implicits._
+
+    ds.filter(f => f.ORIGIN == origin )
+      .map(a => FlightsStats(a.DEST,
+        if (a.DEP_TIME.toDouble > 0 && a.DEP_TIME.toDouble <= 800) 1 else 0,
+        if (a.DEP_TIME.toDouble > 800 && a.DEP_TIME.toDouble <= 1600) 1 else 0,
+        if (a.DEP_TIME.toDouble > 1600 && a.DEP_TIME.toDouble <= 2400) 1 else 0
+      ))
+      .collect().toList
+      .groupBy(f => f.destination)
+      .map(t => FlightsStats(
+        t._1,
+        t._2.map(_.morningFlights).foldLeft(0L)(_ + _),
+        t._2.map(_.afternoonFlights).foldLeft(0L)(_ + _),
+        t._2.map(_.nightFlights).foldLeft(0L)(_ + _))).toList
+  }
 
   //3. Encuentre ¿Cuáles son los números de vuelo (top 20)  que han tenido más cancelaciones y sus causas?
 
