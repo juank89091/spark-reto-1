@@ -117,13 +117,15 @@ trait Challenge1 {
         if (a.DEP_TIME.toDouble > 800 && a.DEP_TIME.toDouble <= 1600) 1 else 0,
         if (a.DEP_TIME.toDouble > 1600 && a.DEP_TIME.toDouble <= 2400) 1 else 0
       ))
-      .collect().toList
-      .groupBy(f => f.destination)
-      .map(t => FlightsStats(
-        t._1,
-        t._2.map(_.morningFlights).foldLeft(0L)(_ + _),
-        t._2.map(_.afternoonFlights).foldLeft(0L)(_ + _),
-        t._2.map(_.nightFlights).foldLeft(0L)(_ + _))).toList
+      .groupByKey(f => f.destination)
+      .reduceGroups{(x,y) => FlightsStats(
+        x.destination,
+        x.morningFlights + y.morningFlights,
+        x.afternoonFlights + y.afternoonFlights,
+        x.nightFlights + y.nightFlights)}
+      .map(_._2)
+      .collect()
+
   }
 
   //3. Encuentre ¿Cuáles son los números de vuelo (top 20)  que han tenido más cancelaciones y sus causas?
@@ -171,7 +173,7 @@ trait Challenge1 {
 
     ds.show()
 
-    ds.filter(_.ARR_DELAY.toDouble > 45)
+    ds.filter(_.ARR_DELAY.toDouble > 45.0)
       .map(a => (dateToDay(a.FL_DATE), 1.0 ))
       .collect()
       .toList
