@@ -1,4 +1,4 @@
-package reto-uno
+package retouno
 
 import org.apache.spark.sql.SparkSession
 
